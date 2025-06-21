@@ -1,0 +1,10 @@
+[package]
+name = "trs"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+hyper = "1.6.0"
+reqwest = "0.12.20"
+tokio = { version = "1.45.1", features = ["full"] }
+xml-rs = "0.8.26"
