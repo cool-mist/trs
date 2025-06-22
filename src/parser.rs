@@ -8,7 +8,7 @@ pub struct RssChannel {
     pub title: String,
     pub link: String,
     pub description: String,
-    pub articles: Vec<Article>,
+    pub articles: Vec<RssArticle>,
 }
 
 impl RssChannel {
@@ -24,7 +24,7 @@ impl RssChannel {
     fn update_channel_field(&mut self, field: &XmlTagField, value: String) -> Result<(), TrsError> {
         let last_article = self.articles.last_mut();
         let no_item_error = || {
-            TrsError::XmlParseError(format!(
+            TrsError::Error(format!(
                 "No item found to update field <{}>",
                 field.hierarchical_tag
             ))
@@ -43,15 +43,15 @@ impl RssChannel {
     }
 }
 
-pub struct Article {
+pub struct RssArticle {
     pub title: String,
     pub link: String,
     pub date: String,
 }
 
-impl Article {
+impl RssArticle {
     fn new() -> Self {
-        Article {
+        RssArticle {
             title: String::new(),
             link: String::new(),
             date: String::new(),
@@ -114,12 +114,12 @@ pub fn parse_rss_channel<R: Read>(
             Ok(XmlEvent::StartElement { name, .. }) => match name.local_name.as_str() {
                 "item" => {
                     tag_prefix = "item > ";
-                    channel.articles.push(Article::new());
+                    channel.articles.push(RssArticle::new());
                 }
                 tag => {
                     let None = current_field else {
                         let current_field_name = current_field.unwrap();
-                        return Err(TrsError::XmlParseError(format!(
+                        return Err(TrsError::Error(format!(
                             "Unexpected <{}> start tag without closing existing tag <{}>",
                             tag, current_field_name.hierarchical_tag
                         )));
@@ -133,7 +133,7 @@ pub fn parse_rss_channel<R: Read>(
                 "item" => {
                     let None = current_field else {
                         let current_field_name = current_field.unwrap();
-                        return Err(TrsError::XmlParseError(format!(
+                        return Err(TrsError::Error(format!(
                             "Unexpected </item> end tag without closing field {}",
                             current_field_name.hierarchical_tag
                         )));
@@ -145,7 +145,7 @@ pub fn parse_rss_channel<R: Read>(
                         if field.tag == tag {
                             current_field = None;
                         } else {
-                            return Err(TrsError::XmlParseError(format!(
+                            return Err(TrsError::Error(format!(
                                 "Unexpected </{}> end tag, expected </{}>",
                                 tag, field.hierarchical_tag
                             )));
@@ -164,10 +164,17 @@ pub fn parse_rss_channel<R: Read>(
             }
             Err(e) => {
                 eprintln!("Error parsing XML: {}", e);
-                return Err(TrsError::XmlRsError(e));
+                return Err(TrsError::XmlRsError(
+                    e,
+                    "Unexpected XML parsing error".to_string(),
+                ));
             }
             _ => {}
         }
+    }
+
+    if channel.title.is_empty() || channel.link.is_empty() || channel.description.is_empty() {
+        return Err(TrsError::Error("This is not a valid RSS feed".to_string()));
     }
 
     Ok(channel)

@@ -1,11 +1,23 @@
 use std::fmt::Display;
 
-use xml::reader::Error;
-
 #[derive(Debug)]
 pub enum TrsError {
-    XmlParseError(String),
-    XmlRsError(Error),
+    Error(String),
+    XmlRsError(xml::reader::Error, String),
+    SqlError(rusqlite::Error, String),
+    ReqwestError(reqwest::Error, String),
+}
+
+impl From<rusqlite::Error> for TrsError {
+    fn from(err: rusqlite::Error) -> Self {
+        TrsError::SqlError(err, "No additional context provided".to_string())
+    }
+}
+
+impl From<reqwest::Error> for TrsError {
+    fn from(err: reqwest::Error) -> Self {
+        TrsError::ReqwestError(err, "No additional context provided".to_string())
+    }
 }
 
 impl Display for TrsError {
@@ -14,8 +26,10 @@ impl Display for TrsError {
             f,
             "{}",
             match self {
-                TrsError::XmlParseError(msg) => format!("XML Parse Error: {}", msg),
-                TrsError::XmlRsError(err) => format!("XML Reader Error: {}", err),
+                TrsError::Error(msg) => format!("XML Parse Error: {}", msg),
+                TrsError::XmlRsError(err, msg) => format!("{} XML Rs error {}", msg, err),
+                TrsError::SqlError(err, msg) => format!("SQL Error: {} - {}", err, msg),
+                TrsError::ReqwestError(err, msg) => format!("Reqwest Error: {} - {}", err, msg),
             }
         )
     }
