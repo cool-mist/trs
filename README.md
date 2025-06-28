@@ -6,6 +6,6 @@
 
 # Features checklist
 
-[ ] Daemon mode, same machine
-[ ] HTTP self-hosted
-[ ] Star
+- [ ] Daemon mode, same machine
+- [ ] HTTP self-hosted
+- [ ] Star
