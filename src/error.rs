@@ -1,8 +1,11 @@
 use std::fmt::Display;
 
+pub type Result<T> = std::result::Result<T, TrsError>;
+
 #[derive(Debug)]
 pub enum TrsError {
     Error(String),
+    TuiError(std::io::Error),
     XmlRsError(xml::reader::Error, String),
     SqlError(rusqlite::Error, String),
     ReqwestError(reqwest::Error, String),
@@ -26,8 +29,9 @@ impl Display for TrsError {
             f,
             "{}",
             match self {
-                TrsError::Error(msg) => format!("XML Parse Error: {}", msg),
-                TrsError::XmlRsError(err, msg) => format!("{} XML Rs error {}", msg, err),
+                TrsError::Error(msg) => format!("{}", msg),
+                TrsError::TuiError(err) => format!("TUI Error: {}", err),
+                TrsError::XmlRsError(err, msg) => format!("XML Rs Error: {} {}", msg, err),
                 TrsError::SqlError(err, msg) => format!("SQL Error: {} - {}", err, msg),
                 TrsError::ReqwestError(err, msg) => format!("Reqwest Error: {} - {}", err, msg),
             }

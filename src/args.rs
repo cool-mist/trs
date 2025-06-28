@@ -12,6 +12,7 @@ pub struct TrsArgs {
 pub enum TrsSubCommand {
     AddChannel(AddChannelArgs),
     ListChannels(ListChannelArgs),
+    RemoveChannel(RemoveChannelArgs),
 }
 
 /// Add a new RSS channel
@@ -30,6 +31,15 @@ pub struct ListChannelArgs {
     /// limit the number of channels to list
     #[argh(option)]
     pub limit: Option<u32>,
+}
+
+/// Delete an RSS channel
+#[derive(FromArgs, PartialEq, Debug)]
+#[argh(subcommand, name = "remove")]
+pub struct RemoveChannelArgs {
+    /// delete the channel with this id
+    #[argh(option)]
+    pub id: u32,
 }
 
 pub fn valid_url(url: &str) -> Result<String, String> {

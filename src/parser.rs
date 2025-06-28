@@ -2,6 +2,7 @@ use std::io::Read;
 
 use xml::{reader::XmlEvent, EventReader};
 
+use crate::error::Result;
 use crate::error::TrsError;
 
 pub struct RssChannel {
@@ -21,7 +22,7 @@ impl RssChannel {
         }
     }
 
-    fn update_channel_field(&mut self, field: &XmlTagField, value: String) -> Result<(), TrsError> {
+    fn update_channel_field(&mut self, field: &XmlTagField, value: String) -> Result<()> {
         let last_article = self.articles.last_mut();
         let no_item_error = || {
             TrsError::Error(format!(
@@ -103,9 +104,7 @@ const FIELD_TAG_MAPPINGS: [XmlTagField; 6] = [
     XmlTagField::mapping("item > pubDate", "pubDate", XmlField::ItemPubDate),
 ];
 
-pub fn parse_rss_channel<R: Read>(
-    xml_source_stream: EventReader<R>,
-) -> Result<RssChannel, TrsError> {
+pub fn parse_rss_channel<R: Read>(xml_source_stream: EventReader<R>) -> Result<RssChannel> {
     let mut channel = RssChannel::new();
     let mut tag_prefix = "";
     let mut current_field: Option<&XmlTagField> = None;
