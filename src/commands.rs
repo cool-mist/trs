@@ -5,16 +5,25 @@ use crate::{
     persistence::Db,
 };
 
-pub fn execute(mut db: Db, args: &TrsArgs) -> Result<(), TrsError> {
-    let sub_command = &args.sub_command;
-    match sub_command {
-        TrsSubCommand::AddChannel(add_args) => add_channel(&mut db, add_args),
-        TrsSubCommand::ListChannels(list_args) => list_channels(&mut db, list_args),
-        TrsSubCommand::RemoveChannel(delete_args) => delete_channel(&mut db, delete_args),
+pub struct RssChannelD {
+    pub id: i64,
+    pub title: String,
+    pub link: String,
+    pub description: String,
+}
+
+impl RssChannelD {
+    fn new(id: i64, title: String, link: String, description: String) -> Self {
+        RssChannelD {
+            id,
+            title,
+            link,
+            description,
+        }
     }
 }
 
-fn add_channel(db: &mut Db, args: &AddChannelArgs) -> Result<(), TrsError> {
+pub fn add_channel(db: &mut Db, args: &AddChannelArgs) -> Result<(), TrsError> {
     let client = reqwest::blocking::Client::new();
     let rss = client.get(&args.link).send().map_err(|e| {
         TrsError::ReqwestError(
@@ -39,7 +48,7 @@ fn add_channel(db: &mut Db, args: &AddChannelArgs) -> Result<(), TrsError> {
     Ok(())
 }
 
-fn list_channels(conn: &mut Db, args: &ListChannelArgs) -> Result<(), TrsError> {
+pub fn list_channels(conn: &mut Db, args: &ListChannelArgs) -> Result<Vec<RssChannelD>, TrsError> {
     let channels_iter =
         conn.list_channels
             .query_map([args.limit.unwrap_or_else(|| 999)], |row| {
@@ -51,18 +60,18 @@ fn list_channels(conn: &mut Db, args: &ListChannelArgs) -> Result<(), TrsError> 
                 ))
             })?;
 
+    let mut channels = Vec::new();
+
     for row in channels_iter {
         let (id, name, link, description) = row?;
-        println!(
-            "ID: {}, Name: {}, Link: {}, Description: {}",
-            id, name, link, description
-        );
+        let channel = RssChannelD::new(id, name, link, description);
+        channels.push(channel);
     }
 
-    Ok(())
+    Ok(channels)
 }
 
-fn delete_channel(db: &mut Db, args: &RemoveChannelArgs) -> Result<(), TrsError> {
+pub fn remove_channel(db: &mut Db, args: &RemoveChannelArgs) -> Result<(), TrsError> {
     let rows_affected = db
         .remove_channel
         .execute([args.id])

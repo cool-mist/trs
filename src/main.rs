@@ -1,4 +1,4 @@
-use args::TrsArgs;
+use args::{TrsArgs, TrsSubCommand};
 use error::Result;
 pub mod args;
 pub mod commands;
@@ -10,16 +10,26 @@ pub mod ui;
 fn main() -> Result<()> {
     if std::env::args().len() < 2 {
         let terminal = ratatui::init();
-        ui::ui(terminal)?;
+        let conn = persistence::init_connection()?;
+        let db = persistence::init_db(&conn)?;
+        ui::ui(db, terminal)?;
         ratatui::restore();
         return Ok(());
     }
 
     let args = argh::from_env::<TrsArgs>();
     let conn = persistence::init_connection()?;
-    let db = persistence::init_db(&conn)?;
-    commands::execute(db, &args).map_err(|e| {
-        eprintln!("Error executing command: {}", e);
-        e
-    })
+    let mut db = persistence::init_db(&conn)?;
+    match args.sub_command {
+        TrsSubCommand::AddChannel(args) => commands::add_channel(&mut db, &args),
+        TrsSubCommand::ListChannels(args) => {
+            let channels = commands::list_channels(&mut db, &args)?;
+            for channel in channels {
+                println!("{}: {} ({})", channel.id, channel.title, channel.link);
+            }
+
+            return Ok(());
+        }
+        TrsSubCommand::RemoveChannel(args) => commands::remove_channel(&mut db, &args),
+    }
 }
