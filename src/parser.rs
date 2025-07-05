@@ -1,5 +1,11 @@
 use std::io::Read;
 
+use time::format_description;
+use time::format_description::well_known::Iso8601;
+use time::format_description::well_known::Rfc2822;
+use time::format_description::well_known::Rfc3339;
+use time::OffsetDateTime;
+use time::PrimitiveDateTime;
 use xml::{reader::XmlEvent, EventReader};
 
 use crate::error::Result;
@@ -10,6 +16,13 @@ pub struct RssChannel {
     pub link: String,
     pub description: String,
     pub articles: Vec<RssArticle>,
+}
+
+pub struct RssArticle {
+    pub title: String,
+    pub link: String,
+    pub description: String,
+    pub date: Option<OffsetDateTime>,
 }
 
 impl RssChannel {
@@ -32,22 +45,21 @@ impl RssChannel {
         };
 
         match field.field {
-            XmlField::ArticleTitle => self.title = value,
-            XmlField::ArticleLink => self.link = value,
-            XmlField::ArticleDescription => self.description = value,
-            XmlField::ItemTitle => last_article.ok_or_else(no_item_error)?.title = value,
-            XmlField::ItemLink => last_article.ok_or_else(no_item_error)?.link = value,
-            XmlField::ItemPubDate => last_article.ok_or_else(no_item_error)?.date = value,
+            XmlField::ChannelTitle => self.title = value,
+            XmlField::ChannelLink => self.link = value,
+            XmlField::ChannelDescription => self.description = value,
+            XmlField::ArticleTitle => last_article.ok_or_else(no_item_error)?.title = value,
+            XmlField::ArticleLink => last_article.ok_or_else(no_item_error)?.link = value,
+            XmlField::ArticleDescription => {
+                last_article.ok_or_else(no_item_error)?.description = value
+            }
+            XmlField::ArticlePubDate => {
+                last_article.ok_or_else(no_item_error)?.date = Some(RssArticle::parse_date(&value)?)
+            }
         }
 
         Ok(())
     }
-}
-
-pub struct RssArticle {
-    pub title: String,
-    pub link: String,
-    pub date: String,
 }
 
 impl RssArticle {
@@ -55,18 +67,42 @@ impl RssArticle {
         RssArticle {
             title: String::new(),
             link: String::new(),
-            date: String::new(),
+            description: String::new(),
+            date: None,
+        }
+    }
+
+    fn parse_date(value: &str) -> Result<OffsetDateTime> {
+        let weird_format = format_description::parse(
+            "[weekday repr:short], [day] [month repr:short] [year] [hour]:[minute]:[second] UTC",
+        )
+        .unwrap();
+        let parsed = OffsetDateTime::parse(value, &Rfc2822)
+            .or(OffsetDateTime::parse(value, &Rfc3339))
+            .or(OffsetDateTime::parse(value, &Iso8601::DEFAULT));
+
+        match parsed {
+            Ok(date) => Ok(date),
+            Err(_) => {
+                // Try parsing with the weird format
+                PrimitiveDateTime::parse(value, &weird_format)
+                    .map(|dt| dt.assume_utc())
+                    .map_err(|e| {
+                        TrsError::Error(format!("Failed to parse date '{}': {}", value, e))
+                    })
+            }
         }
     }
 }
 
 enum XmlField {
-    ItemTitle,
-    ItemLink,
-    ItemPubDate,
     ArticleTitle,
     ArticleLink,
+    ArticlePubDate,
     ArticleDescription,
+    ChannelTitle,
+    ChannelLink,
+    ChannelDescription,
 }
 
 struct XmlTagField {
@@ -95,13 +131,18 @@ impl XmlTagField {
     }
 }
 
-const FIELD_TAG_MAPPINGS: [XmlTagField; 6] = [
-    XmlTagField::mapping("title", "title", XmlField::ArticleTitle),
-    XmlTagField::mapping("link", "link", XmlField::ArticleLink),
-    XmlTagField::mapping("description", "description", XmlField::ArticleDescription),
-    XmlTagField::mapping("item > title", "title", XmlField::ItemTitle),
-    XmlTagField::mapping("item > link", "link", XmlField::ItemLink),
-    XmlTagField::mapping("item > pubDate", "pubDate", XmlField::ItemPubDate),
+const FIELD_TAG_MAPPINGS: [XmlTagField; 7] = [
+    XmlTagField::mapping("title", "title", XmlField::ChannelTitle),
+    XmlTagField::mapping("link", "link", XmlField::ChannelLink),
+    XmlTagField::mapping("description", "description", XmlField::ChannelDescription),
+    XmlTagField::mapping("item > title", "title", XmlField::ArticleTitle),
+    XmlTagField::mapping("item > link", "link", XmlField::ArticleLink),
+    XmlTagField::mapping(
+        "item > description",
+        "description",
+        XmlField::ArticleDescription,
+    ),
+    XmlTagField::mapping("item > pubDate", "pubDate", XmlField::ArticlePubDate),
 ];
 
 pub fn parse_rss_channel<R: Read>(xml_source_stream: EventReader<R>) -> Result<RssChannel> {
@@ -201,7 +242,8 @@ mod tests {
                 for article in &rss_channel.articles {
                     assert!(!article.title.is_empty());
                     assert!(!article.link.is_empty());
-                    assert!(!article.date.is_empty());
+                    assert!(!article.description.is_empty());
+                    assert!(article.date.is_some());
                 }
             }
         };

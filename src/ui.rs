@@ -2,9 +2,9 @@ use std::io::Stdout;
 
 use crate::{
     args::ListChannelArgs,
-    commands::{self, RssChannelD},
+    commands::{self, TrsEnv},
     error::{Result, TrsError},
-    persistence::Db,
+    persistence::RssChannelD,
 };
 use crossterm::event::{self, Event, KeyEventKind};
 use ratatui::{
@@ -72,13 +72,13 @@ struct AppState {
     channels: Vec<RssChannelD>,
 }
 
-pub fn ui(mut db: Db, mut terminal: Terminal<CrosstermBackend<Stdout>>) -> Result<()> {
+pub fn ui(mut ctx: TrsEnv, mut terminal: Terminal<CrosstermBackend<Stdout>>) -> Result<()> {
     let mut app_state = AppState {
         channels: Vec::new(),
         exit: false,
     };
 
-    let channels = commands::list_channels(&mut db, &ListChannelArgs { limit: None })?;
+    let channels = commands::list_channels(&mut ctx, &ListChannelArgs { limit: None })?;
     app_state.channels = channels;
 
     loop {

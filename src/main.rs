@@ -1,4 +1,5 @@
 use args::{TrsArgs, TrsSubCommand};
+use commands::TrsEnv;
 use error::Result;
 pub mod args;
 pub mod commands;
@@ -10,26 +11,27 @@ pub mod ui;
 fn main() -> Result<()> {
     if std::env::args().len() < 2 {
         let terminal = ratatui::init();
-        let conn = persistence::init_connection()?;
-        let db = persistence::init_db(&conn)?;
-        ui::ui(db, terminal)?;
+        let ctx = TrsEnv::new("test")?;
+        ui::ui(ctx, terminal)?;
         ratatui::restore();
         return Ok(());
     }
 
     let args = argh::from_env::<TrsArgs>();
-    let conn = persistence::init_connection()?;
-    let mut db = persistence::init_db(&conn)?;
+    let mut ctx = TrsEnv::new("test")?;
     match args.sub_command {
-        TrsSubCommand::AddChannel(args) => commands::add_channel(&mut db, &args),
+        TrsSubCommand::AddChannel(args) => {
+            commands::add_channel(&mut ctx, &args)?;
+            Ok(())
+        }
         TrsSubCommand::ListChannels(args) => {
-            let channels = commands::list_channels(&mut db, &args)?;
+            let channels = commands::list_channels(&mut ctx, &args)?;
             for channel in channels {
-                println!("{}: {} ({})", channel.id, channel.title, channel.link);
+                println!("{}: {} ({}) updated on {}", channel.id, channel.title, channel.link, channel.last_update);
             }
 
-            return Ok(());
+            Ok(())
         }
-        TrsSubCommand::RemoveChannel(args) => commands::remove_channel(&mut db, &args),
+        TrsSubCommand::RemoveChannel(args) => commands::remove_channel(&mut ctx, &args),
     }
 }
