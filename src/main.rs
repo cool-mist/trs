@@ -33,5 +33,22 @@ fn main() -> Result<()> {
             Ok(())
         }
         TrsSubCommand::RemoveChannel(args) => commands::remove_channel(&mut ctx, &args),
+        TrsSubCommand::GetArticles(args) => {
+            let channels = commands::get_articles_by_channel(&mut ctx, &args)?;
+            for channel in channels {
+                println!("Channel #{}: {} ({})", channel.id, channel.title, channel.link);
+                for article in channel.articles {
+                    println!(
+                        " #{} - {} ({}) [{}]",
+                        article.id,
+                        article.title,
+                        article.link,
+                        article.pub_date.map_or("No date".to_string(), |d| d.to_string())
+                    );
+                }
+            }
+            Ok(())
+        }
+        TrsSubCommand::MarkRead(args) => commands::mark_read(&mut ctx, &args),
     }
 }

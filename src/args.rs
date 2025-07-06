@@ -12,7 +12,9 @@ pub struct TrsArgs {
 pub enum TrsSubCommand {
     AddChannel(AddChannelArgs),
     ListChannels(ListChannelArgs),
+    GetArticles(GetArticlesArgs),
     RemoveChannel(RemoveChannelArgs),
+    MarkRead(MarkReadArgs),
 }
 
 /// Add a new RSS channel
@@ -31,6 +33,32 @@ pub struct ListChannelArgs {
     /// limit the number of channels to list
     #[argh(option)]
     pub limit: Option<u32>,
+}
+
+/// Get articles
+#[derive(FromArgs, PartialEq, Debug)]
+#[argh(subcommand, name = "articles")]
+pub struct GetArticlesArgs {
+    /// id of the channel to get articles from
+    #[argh(option, short = 'c')]
+    pub channel_id: Option<u32>,
+
+    /// only get unread articles
+    #[argh(switch)]
+    pub unread: bool,
+}
+
+/// Mark article as read/unread
+#[derive(FromArgs, PartialEq, Debug)]
+#[argh(subcommand, name = "read")]
+pub struct MarkReadArgs {
+    /// id of the article to mark read/unread
+    #[argh(option)]
+    pub id: u32,
+
+    /// mark the article as unread
+    #[argh(switch)]
+    pub unread: bool,
 }
 
 /// Delete an RSS channel

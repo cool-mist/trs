@@ -1,5 +1,5 @@
 use crate::{
-    args::{AddChannelArgs, ListChannelArgs, RemoveChannelArgs},
+    args::{self, AddChannelArgs, ListChannelArgs, RemoveChannelArgs},
     error::TrsError,
     parser,
     persistence::{Db, RssChannelD},
@@ -50,4 +50,35 @@ pub fn list_channels(
 
 pub fn remove_channel(ctx: &mut TrsEnv, args: &RemoveChannelArgs) -> Result<(), TrsError> {
     ctx.db.remove_channel(args.id).map(|_| ())
+}
+
+pub fn mark_read(ctx: &mut TrsEnv, args: &args::MarkReadArgs) -> Result<(), TrsError> {
+    match args.unread {
+        true => ctx.db.mark_article_unread(args.id as i64)?,
+        false => ctx.db.mark_article_read(args.id as i64)?,
+    };
+
+    Ok(())
+}
+
+pub fn get_articles_by_channel(
+    ctx: &mut TrsEnv,
+    args: &args::GetArticlesArgs,
+) -> Result<Vec<RssChannelD>, TrsError> {
+    let mut channels = ctx.db.list_channels(u32::MAX)?;
+    channels.retain(|channel| {
+        if let Some(channel_id) = args.channel_id {
+            channel_id as i64 == channel.id
+        } else {
+            true
+        }
+    });
+
+    if args.unread {
+        for channel in &mut channels {
+            channel.articles.retain(|article| article.unread);
+        }
+    }
+
+    Ok(channels)
 }
