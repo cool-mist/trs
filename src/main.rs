@@ -9,14 +9,6 @@ pub mod persistence;
 pub mod ui;
 
 fn main() -> Result<()> {
-    if std::env::args().len() < 2 {
-        let terminal = ratatui::init();
-        let ctx = TrsEnv::new("test")?;
-        ui::ui(ctx, terminal)?;
-        ratatui::restore();
-        return Ok(());
-    }
-
     let args = argh::from_env::<TrsArgs>();
     let mut ctx = TrsEnv::new("test")?;
     match args.sub_command {
@@ -27,7 +19,10 @@ fn main() -> Result<()> {
         TrsSubCommand::ListChannels(args) => {
             let channels = commands::list_channels(&mut ctx, &args)?;
             for channel in channels {
-                println!("{}: {} ({}) updated on {}", channel.id, channel.title, channel.link, channel.last_update);
+                println!(
+                    "{}: {} ({}) updated on {}",
+                    channel.id, channel.title, channel.link, channel.last_update
+                );
             }
 
             Ok(())
@@ -36,19 +31,25 @@ fn main() -> Result<()> {
         TrsSubCommand::GetArticles(args) => {
             let channels = commands::get_articles_by_channel(&mut ctx, &args)?;
             for channel in channels {
-                println!("Channel #{}: {} ({})", channel.id, channel.title, channel.link);
+                println!(
+                    "Channel #{}: {} ({})",
+                    channel.id, channel.title, channel.link
+                );
                 for article in channel.articles {
                     println!(
                         " #{} - {} ({}) [{}]",
                         article.id,
                         article.title,
                         article.link,
-                        article.pub_date.map_or("No date".to_string(), |d| d.to_string())
+                        article
+                            .pub_date
+                            .map_or("No date".to_string(), |d| d.to_string())
                     );
                 }
             }
             Ok(())
         }
         TrsSubCommand::MarkRead(args) => commands::mark_read(&mut ctx, &args),
+        TrsSubCommand::Ui(args) => ui::ui(&mut ctx, &args),
     }
 }

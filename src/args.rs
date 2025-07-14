@@ -15,6 +15,7 @@ pub enum TrsSubCommand {
     GetArticles(GetArticlesArgs),
     RemoveChannel(RemoveChannelArgs),
     MarkRead(MarkReadArgs),
+    Ui(UiArgs),
 }
 
 /// Add a new RSS channel
@@ -68,6 +69,15 @@ pub struct RemoveChannelArgs {
     /// delete the channel with this id
     #[argh(option)]
     pub id: u32,
+}
+
+/// Open UI
+#[derive(FromArgs, PartialEq, Debug)]
+#[argh(subcommand, name = "ui")]
+pub struct UiArgs {
+    /// enable debug window
+    #[argh(switch)]
+    pub debug: bool,
 }
 
 pub fn valid_url(url: &str) -> Result<String, String> {

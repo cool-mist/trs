@@ -166,7 +166,6 @@ impl Db {
             .collect::<Vec<RssChannelD>>();
 
         let mut articles = self.list_articles()?;
-
         for channel in &mut channels {
             for article in &mut articles {
                 if article.channel_id == channel.id {
