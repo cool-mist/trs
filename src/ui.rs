@@ -41,6 +41,7 @@ enum TrsEvent {
     FocusArticles,
     FocusChannels,
     ToggleDebug,
+    OpenArticle,
     Exit,
 }
 
@@ -161,6 +162,20 @@ fn handle_events(state: &mut AppState) -> Result<()> {
         TrsEvent::Exit => state.exit = true,
         TrsEvent::FocusArticles => state.focussed = FocussedPane::Articles,
         TrsEvent::FocusChannels => state.focussed = FocussedPane::Channels,
+        TrsEvent::OpenArticle => {
+            if let Some(channel_idx) = state.highlighted_channel {
+                if let Some(article_idx) = state.highlighted_article {
+                    if let Some(channel) = state.channels.get(channel_idx) {
+                        if let Some(article) = channel.articles.get(article_idx) {
+                            let open_res = open::that(&article.link);
+                            if let Err(e) = open_res {
+                                eprintln!("Failed to open article: {}", e);
+                            }
+                        }
+                    }
+                }
+            }
+        }
     };
     Ok(())
 }
@@ -180,6 +195,7 @@ fn parse_trs_event(state: &AppState, raw_event: Event) -> TrsEvent {
             },
             KeyCode::Char('k') => TrsEvent::FocusEntryUp,
             KeyCode::Char('d') if state.debug_enabled => return TrsEvent::ToggleDebug,
+            KeyCode::Enter => return TrsEvent::OpenArticle,
             _ => TrsEvent::None,
         },
         _ => TrsEvent::None,
