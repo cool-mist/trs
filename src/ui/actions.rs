@@ -1,7 +1,4 @@
-use crate::{
-    error::TrsError,
-    persistence::{RssArticleD, RssChannelD},
-};
+use crate::{error::TrsError, persistence::RssChannelD};
 
 use super::{AppState, FocussedPane, UiAction};
 
