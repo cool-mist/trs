@@ -6,7 +6,8 @@
 
 # Todo
 
-- Fix parser, doesnt work for https://blog.codinghorror.com/rss/
+- Fix parser
+    - [ ] https://blog.codinghorror.com/rss/
 - Add support for Atom feeds
 - Add/remove from TUI
 - Sync
