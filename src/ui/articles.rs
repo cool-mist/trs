@@ -60,20 +60,20 @@ impl<'a> Widget for ArticlesWidget<'a> {
             let mut lines = Vec::new();
             let id = Span::styled(
                 format!("{:>3}. ", idx + 1),
-                get_channel_id_style(current_highlighted),
+                get_article_id_style(current_highlighted),
             );
             let title = Span::styled(
                 article.title.clone(),
-                get_channel_title_style(current_highlighted),
+                get_article_title_style(current_highlighted),
             );
 
-            lines.push(Line::from(vec![id, title]));
-            if let Some(pub_date) = article.pub_date {
-                let pub_date_text = format!("Published: {}", pub_date);
-                let pub_date_span = Span::styled(pub_date_text, get_channel_pub_date_style(false));
-                lines.push(Line::from(vec![pub_date_span]));
-            }
+            let unread = if article.unread {
+                Span::styled(" (unread)", Style::default().fg(Color::Red))
+            } else {
+                Span::raw("")
+            };
 
+            lines.push(Line::from(vec![id, title, unread]));
             let para = Paragraph::new(lines)
                 .block(Block::default())
                 .style(get_channel_list_item_block_style(current_highlighted))
@@ -83,7 +83,7 @@ impl<'a> Widget for ArticlesWidget<'a> {
     }
 }
 
-fn get_channel_id_style(highlighted: bool) -> Style {
+fn get_article_id_style(highlighted: bool) -> Style {
     if highlighted {
         Style::default()
             .fg(Color::Black)
@@ -103,17 +103,7 @@ fn get_channel_list_item_block_style(highlighted: bool) -> Style {
     }
 }
 
-fn get_channel_pub_date_style(highlighted: bool) -> Style {
-    if highlighted {
-        Style::default()
-            .fg(Color::Black)
-            .add_modifier(Modifier::BOLD)
-    } else {
-        Style::default()
-    }
-}
-
-fn get_channel_title_style(highlighted: bool) -> Style {
+fn get_article_title_style(highlighted: bool) -> Style {
     if highlighted {
         Style::default()
             .fg(Color::Black)

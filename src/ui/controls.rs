@@ -32,6 +32,8 @@ pub fn parse_ui_action(raw_event: Event) -> UiAction {
                 return match key_event.code {
                     KeyCode::Char('l') => UiAction::FocusPaneRight,
                     KeyCode::Char('h') => UiAction::FocusPaneLeft,
+                    KeyCode::Char('k') => UiAction::FocusEntryUp,
+                    KeyCode::Char('j') => UiAction::FocusEntryDown,
                     KeyCode::Char('d') => UiAction::ToggleDebug,
                     KeyCode::Char('q') => UiAction::Exit,
                     KeyCode::Enter => UiAction::OpenArticle,
