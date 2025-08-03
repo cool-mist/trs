@@ -10,7 +10,7 @@ pub mod ui;
 
 fn main() -> Result<()> {
     let args = argh::from_env::<TrsArgs>();
-    let mut ctx = TrsEnv::new("test")?;
+    let mut ctx = TrsEnv::new("test3")?;
     match args.sub_command {
         TrsSubCommand::AddChannel(args) => {
             commands::add_channel(&mut ctx, &args)?;
@@ -50,6 +50,6 @@ fn main() -> Result<()> {
             Ok(())
         }
         TrsSubCommand::MarkRead(args) => commands::mark_read(&mut ctx, &args),
-        TrsSubCommand::Ui(args) => ui::ui(&mut ctx, &args),
+        TrsSubCommand::Ui(args) => ui::ui(ctx, &args),
     }
 }

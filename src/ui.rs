@@ -3,12 +3,17 @@ pub mod articles;
 pub mod channels;
 pub mod controls;
 pub mod debug;
+pub mod executor;
 pub mod title;
 
-use std::io::Stdout;
+use std::{
+    io::Stdout,
+    sync::mpsc::{channel, Receiver, Sender},
+    thread,
+};
 
 use crate::{
-    args::{ListChannelArgs, UiArgs},
+    args::{self, ListChannelArgs, UiArgs},
     commands::{self, TrsEnv},
     error::{Result, TrsError},
     persistence::RssChannelD,
@@ -18,6 +23,7 @@ use channels::ChannelsWidget;
 use controls::ControlsWidget;
 use crossterm::event;
 use debug::DebugWidget;
+use executor::UiCommandExecutor;
 use ratatui::{
     prelude::*,
     widgets::{Block, Borders},
@@ -33,6 +39,10 @@ pub struct AppState {
     highlighted_channel: Option<usize>,
     highlighted_article: Option<usize>,
     last_action: Option<UiAction>,
+    show_add_channel_ui: bool,
+    add_channel: String,
+    dispatcher: Sender<UiCommandDispatchActions>,
+    receiver: Receiver<u64>,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -52,10 +62,31 @@ pub enum UiAction {
     FocusEntryDown,
     ToggleDebug,
     OpenArticle,
+    ShowAddChannelUi,
+    RemoveChannel,
+    ToggleReadStatus,
     Exit,
 }
 
-pub fn ui(ctx: &mut TrsEnv, args: &UiArgs) -> Result<()> {
+#[derive(Debug, Clone, PartialEq)]
+pub enum PopupUiAction {
+    None,
+    Submit,
+    AddChar(char),
+    Backspace,
+    Close,
+}
+
+#[derive(Debug)]
+pub enum UiCommandDispatchActions {
+    AddChannel(args::AddChannelArgs),
+    RemoveChannel(args::RemoveChannelArgs),
+    MarkArticleRead(args::MarkReadArgs),
+}
+
+pub fn ui(ctx: TrsEnv, args: &UiArgs) -> Result<()> {
+    let (tdispatch, rdispatch) = channel();
+    let (tupdate, rupdate) = channel();
     let mut terminal = ratatui::init();
     let mut app_state = AppState {
         channels: Vec::new(),
@@ -66,19 +97,31 @@ pub fn ui(ctx: &mut TrsEnv, args: &UiArgs) -> Result<()> {
         highlighted_article: None,
         highlighted_channel: None,
         last_action: None,
+        show_add_channel_ui: false,
+        add_channel: String::new(),
+        dispatcher: tdispatch,
+        receiver: rupdate,
     };
 
-    let channels = commands::list_channels(ctx, &ListChannelArgs { limit: None })?;
+    let ctx_cloned = ctx.clone();
+    let executor = UiCommandExecutor::new(rdispatch, tupdate);
+    let executor_handle = thread::spawn(move || {
+        executor.run(ctx_cloned);
+    });
+
+    let channels = commands::list_channels(&ctx, &ListChannelArgs { limit: None })?;
     app_state.channels = channels;
 
     loop {
         draw(&app_state, &mut terminal)?;
-        handle_events(&mut app_state)?;
+        handle_events(&mut app_state, &ctx)?;
         if app_state.exit {
             break;
         }
     }
 
+    drop(app_state);
+    executor_handle.join().unwrap();
     ratatui::restore();
     Ok(())
 }
@@ -93,8 +136,20 @@ fn draw(app_state: &AppState, terminal: &mut Terminal<CrosstermBackend<Stdout>>)
     Ok(())
 }
 
-fn handle_events(state: &mut AppState) -> Result<()> {
+fn handle_events(state: &mut AppState, ctx: &TrsEnv) -> Result<()> {
+    let recv_action = state.receiver.try_recv();
+
+    if let Ok(_) = recv_action {
+        let channels = commands::list_channels(&ctx, &ListChannelArgs { limit: None })?;
+        state.channels = channels;
+    }
+
     let raw_event = event::read().map_err(|e| TrsError::TuiError(e))?;
+    if state.show_add_channel_ui {
+        let event = controls::parse_popup_ui_action(raw_event);
+        return actions::handle_popup_action(state, event);
+    }
+
     let event = controls::parse_ui_action(raw_event);
     state.last_action = Some(event.clone());
     actions::handle_action(state, event)

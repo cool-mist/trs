@@ -5,11 +5,16 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Paragraph, Widget},
 };
+use time::format_description;
 
 use super::AppState;
 
 pub struct ChannelsWidget<'a> {
     state: &'a AppState,
+}
+
+pub struct AddChannelWidget<'a> {
+    state: &'a str,
 }
 
 impl<'a> ChannelsWidget<'a> {
@@ -44,35 +49,49 @@ impl<'a> Widget for ChannelsWidget<'a> {
                 .highlighted_channel
                 .filter(|h| *h == idx)
                 .is_some();
-            let mut lines = Vec::new();
+            let mut spans = Vec::new();
             let id = Span::styled(
                 format!("{:>3}. ", idx + 1),
                 get_channel_id_style(current_highlighted),
             );
+            spans.push(id);
 
             let title = Span::styled(
                 channel.title.clone(),
                 get_channel_title_style(current_highlighted),
             );
+            spans.push(title);
 
-            lines.push(Line::from(vec![id, title]));
+            let format = format_description::parse("[year]-[month]-[day]").unwrap();
             if let Some(article) = channel.articles.first() {
                 let pub_date_text = match article.pub_date {
-                    Some(date) => format!("Last update: {}", date),
+                    Some(date) => format!(" {}", date.format(&format).unwrap()),
                     None => "".to_string(),
                 };
                 let pub_date = Span::styled(
                     pub_date_text,
                     get_channel_pub_date_style(current_highlighted),
                 );
-                lines.push(Line::from(vec![pub_date]));
+                spans.push(pub_date);
             }
 
-            let para = Paragraph::new(lines)
+            let para = Paragraph::new(Line::from(spans))
                 .block(Block::default())
                 .style(get_channel_list_item_block_style(current_highlighted))
                 .alignment(Alignment::Left);
             para.render(row, buf);
+        }
+
+        if self.state.show_add_channel_ui {
+            let add_channel_area = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints(Constraint::from_percentages(vec![90, 10]))
+                .split(area)
+                .to_vec();
+            AddChannelWidget {
+                state: &self.state.add_channel,
+            }
+            .render(add_channel_area[1], buf);
         }
     }
 }
@@ -114,5 +133,23 @@ fn get_channel_title_style(highlighted: bool) -> Style {
             .add_modifier(Modifier::BOLD)
     } else {
         Style::default()
+    }
+}
+
+impl<'a> Widget for AddChannelWidget<'a> {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        let block = Block::default()
+            .title_top(Line::from("Add Channel").centered())
+            .title_style(
+                Style::default()
+                    .fg(Color::Blue)
+                    .add_modifier(Modifier::BOLD | Modifier::ITALIC | Modifier::UNDERLINED),
+            )
+            .borders(ratatui::widgets::Borders::ALL)
+            .border_style(Style::default().fg(Color::DarkGray));
+
+        let para = Paragraph::new(Line::from(self.state)).block(block);
+
+        para.render(area, buf);
     }
 }

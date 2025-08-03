@@ -23,25 +23,29 @@ impl<'a> Widget for DebugWidget<'a> {
         lines.push(format!("channels: {}", self.state.channels.len()));
         lines.push(format!("highlighted: {:?}", self.state.highlighted_channel));
         if let Some(h) = self.state.highlighted_channel {
-            for channel in &self.state.channels {
-                if channel.id as usize == h {
-                    lines.push(format!(
-                        "highlighted channel: ({},{},{},{:?})",
-                        channel.id, channel.title, channel.link, channel.last_update
-                    ));
+            let hi_channel = self.state.channels.get(h);
+            if let Some(channel) = hi_channel {
+                lines.push(format!(
+                    "highlighted channel: ({}, {:?}, {})",
+                    channel.id, channel.last_update, channel.title,
+                ));
 
-                    if let Some(article) = channel.articles.first() {
+                if let Some(article) = channel.articles.first() {
+                    lines.push(format!(
+                        "first article: ({} ,{:?}, {})",
+                        article.id, article.last_update, article.title,
+                    ));
+                }
+                if let Some(h) = self.state.highlighted_article {
+                    let hi_article = channel.articles.get(h);
+                    if let Some(article) = hi_article {
                         lines.push(format!(
-                            "first article: ({},{},{},{:?})",
-                            article.id, article.title, article.link, article.last_update
+                            "highlighted article: ({}, {:?}, {}, unread={})",
+                            article.id, article.last_update, article.title, article.unread,
                         ));
                     }
                 }
             }
-        }
-
-        if let Some(h) = self.state.highlighted_article {
-            lines.push(format!("highlighted article: {}", h));
         }
 
         let line_areas = Layout::default()

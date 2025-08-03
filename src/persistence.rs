@@ -13,7 +13,7 @@ const SCHEMA_CHANNELS: &'static str = "CREATE TABLE IF NOT EXISTS Channels ( \
     name TEXT NOT NULL, \
     link TEXT NOT NULL UNIQUE, \
     description TEXT, \
-    last_update TIMESTAMP DEFAULT CURRENT_TIMESTAMP \
+    last_update INTEGER\
 )";
 
 const SCHEMA_ARTICLES: &'static str = "CREATE TABLE IF NOT EXISTS Articles ( \
@@ -22,15 +22,15 @@ const SCHEMA_ARTICLES: &'static str = "CREATE TABLE IF NOT EXISTS Articles ( \
     title TEXT NOT NULL, \
     description TEXT, \
     link TEXT NOT NULL UNIQUE, \
-    pub_date TIMESTAMP, \
-    last_update TIMESTAMP DEFAULT CURRENT_TIMESTAMP, \
-    unread BOOLEAN DEFAULT FALSE, \
+    pub_date INTEGER, \
+    last_update INTEGER , \
+    unread BOOLEAN DEFAULT TRUE, \
     FOREIGN KEY(channel_id) REFERENCES Channels(id) ON DELETE CASCADE \
 )";
 
 const ADD_CHANNEL: &'static str = "INSERT INTO Channels (name, link, description, last_update) \
-          VALUES (?1, ?2, ?3, CURRENT_TIMESTAMP)\
-          ON CONFLICT(link) DO UPDATE SET name=?1, description=?3, last_update=CURRENT_TIMESTAMP";
+          VALUES (?1, ?2, ?3, ?4)\
+          ON CONFLICT(link) DO UPDATE SET name=?1, description=?3, last_update=?4";
 const REMOVE_CHANNEL: &'static str = "DELETE FROM Channels WHERE id = ?1";
 const LIST_CHANNELS: &'static str =
     "SELECT id, name, link, description, last_update FROM Channels LIMIT ?1";
@@ -38,9 +38,9 @@ const GET_CHANNEL: &'static str =
     "SELECT id, name, link, description, last_update FROM Channels WHERE link = ?1";
 
 const ADD_ARTICLE: &'static str =
-    "INSERT INTO Articles (channel_id, title, description, link, pub_date, last_update) \
-          VALUES (?1, ?2, ?3, ?4, ?5, CURRENT_TIMESTAMP) \
-          ON CONFLICT(link) DO UPDATE SET pub_date=?5, last_update=CURRENT_TIMESTAMP";
+    "INSERT INTO Articles (channel_id, title, description, link, pub_date, last_update, unread) \
+          VALUES (?1, ?2, ?3, ?4, ?5, ?6, true) \
+          ON CONFLICT(link) DO UPDATE SET last_update=?6";
 
 const GET_ARTICLES_BY_CHANNEL: &'static str =
     "SELECT id, channel_id, title, description, link, pub_date, last_update, unread FROM Articles WHERE channel_id = ?1";
@@ -130,7 +130,12 @@ impl Db {
         self.connection
             .execute(
                 ADD_CHANNEL,
-                (&channel.title, &channel.link, &channel.description),
+                (
+                    &channel.title,
+                    &channel.link,
+                    &channel.description,
+                    OffsetDateTime::now_utc().unix_timestamp(),
+                ),
             )
             .map_err(|e| TrsError::SqlError(e, "Failed to add channel".to_string()))?;
 
@@ -201,7 +206,8 @@ impl Db {
                     &article.title,
                     &article.description,
                     &article.link,
-                    article.date.map(|d| d.to_string()),
+                    article.date.map(|d| d.unix_timestamp()),
+                    OffsetDateTime::now_utc().unix_timestamp(),
                 ),
             )
             .map_err(|e| TrsError::SqlError(e, "Failed to add article".to_string()))?;
@@ -250,7 +256,7 @@ impl Db {
             row.get(1)?,
             row.get(2)?,
             row.get(3)?,
-            row.get(4)?,
+            Db::read_datetime(4, &row)?,
             Vec::new(),
         ))
     }
@@ -262,10 +268,25 @@ impl Db {
             title: row.get(2)?,
             description: row.get(3)?,
             link: row.get(4)?,
-            pub_date: row.get(5).ok(),
-            last_update: row.get(6).ok(),
+            pub_date: Db::read_datetime(5, row).ok(),
+            last_update: Db::read_datetime(6, row).ok(),
             unread: row.get(7)?,
         })
+    }
+
+    fn read_datetime(
+        idx: usize,
+        row: &rusqlite::Row,
+    ) -> std::result::Result<OffsetDateTime, rusqlite::Error> {
+        row.get::<usize, i64>(idx).map(|ts| {
+            OffsetDateTime::from_unix_timestamp(ts).map_err(|e| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    idx,
+                    rusqlite::types::Type::Integer,
+                    Box::new(e),
+                )
+            })
+        })?
     }
 }
 

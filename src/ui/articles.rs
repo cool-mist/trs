@@ -58,22 +58,20 @@ impl<'a> Widget for ArticlesWidget<'a> {
                 .filter(|h| *h == idx)
                 .is_some();
             let mut lines = Vec::new();
-            let id = Span::styled(
-                format!("{:>3}. ", idx + 1),
-                get_article_id_style(current_highlighted),
-            );
+            let id = if article.unread {
+                Span::styled("  *  ", Style::default().fg(Color::Red))
+            } else {
+                Span::styled(
+                    format!("{:>3}. ", idx + 1),
+                    get_article_id_style(current_highlighted),
+                )
+            };
             let title = Span::styled(
                 article.title.clone(),
                 get_article_title_style(current_highlighted),
             );
 
-            let unread = if article.unread {
-                Span::styled(" (unread)", Style::default().fg(Color::Red))
-            } else {
-                Span::raw("")
-            };
-
-            lines.push(Line::from(vec![id, title, unread]));
+            lines.push(Line::from(vec![id, title]));
             let para = Paragraph::new(lines)
                 .block(Block::default())
                 .style(get_channel_list_item_block_style(current_highlighted))

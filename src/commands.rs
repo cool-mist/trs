@@ -6,8 +6,16 @@ use crate::{
 };
 
 pub struct TrsEnv {
+    name: String,
     db: Db,
     http_client: reqwest::blocking::Client,
+}
+
+impl Clone for TrsEnv {
+    fn clone(&self) -> Self {
+        let name = self.name.clone();
+        TrsEnv::new(&name).expect("Failed to clone TrsEnv")
+    }
 }
 
 impl TrsEnv {
@@ -17,11 +25,15 @@ impl TrsEnv {
             .user_agent("cool-mist/trs")
             .build()
             .map_err(|e| TrsError::ReqwestError(e, "Failed to create HTTP client".to_string()))?;
-        Ok(TrsEnv { db, http_client })
+        Ok(TrsEnv {
+            name: instance_name.to_string(),
+            db,
+            http_client,
+        })
     }
 }
 
-pub fn add_channel(ctx: &mut TrsEnv, args: &AddChannelArgs) -> Result<RssChannelD, TrsError> {
+pub fn add_channel(ctx: &TrsEnv, args: &AddChannelArgs) -> Result<RssChannelD, TrsError> {
     let rss = ctx.http_client.get(&args.link).send().map_err(|e| {
         TrsError::ReqwestError(
             e,
@@ -41,18 +53,15 @@ pub fn add_channel(ctx: &mut TrsEnv, args: &AddChannelArgs) -> Result<RssChannel
     ctx.db.add_channel(&channel)
 }
 
-pub fn list_channels(
-    ctx: &mut TrsEnv,
-    args: &ListChannelArgs,
-) -> Result<Vec<RssChannelD>, TrsError> {
+pub fn list_channels(ctx: &TrsEnv, args: &ListChannelArgs) -> Result<Vec<RssChannelD>, TrsError> {
     ctx.db.list_channels(args.limit.unwrap_or(u32::MAX))
 }
 
-pub fn remove_channel(ctx: &mut TrsEnv, args: &RemoveChannelArgs) -> Result<(), TrsError> {
+pub fn remove_channel(ctx: &TrsEnv, args: &RemoveChannelArgs) -> Result<(), TrsError> {
     ctx.db.remove_channel(args.id).map(|_| ())
 }
 
-pub fn mark_read(ctx: &mut TrsEnv, args: &args::MarkReadArgs) -> Result<(), TrsError> {
+pub fn mark_read(ctx: &TrsEnv, args: &args::MarkReadArgs) -> Result<(), TrsError> {
     match args.unread {
         true => ctx.db.mark_article_unread(args.id as i64)?,
         false => ctx.db.mark_article_read(args.id as i64)?,

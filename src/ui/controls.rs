@@ -7,9 +7,32 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, Widget},
 };
 
-use super::UiAction;
+use super::{PopupUiAction, UiAction};
 
 pub struct ControlsWidget;
+
+pub fn parse_popup_ui_action(raw_event: Event) -> PopupUiAction {
+    match raw_event {
+        Event::Key(key_event) => {
+            if key_event.kind != KeyEventKind::Press {
+                return PopupUiAction::None;
+            }
+
+            if key_event.modifiers != KeyModifiers::NONE {
+                return PopupUiAction::None;
+            }
+
+            return match key_event.code {
+                KeyCode::Backspace => PopupUiAction::Backspace,
+                KeyCode::Char(c) => PopupUiAction::AddChar(c),
+                KeyCode::Enter => PopupUiAction::Submit,
+                KeyCode::Esc => PopupUiAction::Close,
+                _ => PopupUiAction::None,
+            };
+        }
+        _ => PopupUiAction::None,
+    }
+}
 
 pub fn parse_ui_action(raw_event: Event) -> UiAction {
     match raw_event {
@@ -36,6 +59,9 @@ pub fn parse_ui_action(raw_event: Event) -> UiAction {
                     KeyCode::Char('j') => UiAction::FocusEntryDown,
                     KeyCode::Char('d') => UiAction::ToggleDebug,
                     KeyCode::Char('q') => UiAction::Exit,
+                    KeyCode::Char('a') => UiAction::ShowAddChannelUi,
+                    KeyCode::Char('r') => UiAction::RemoveChannel,
+                    KeyCode::Char('u') => UiAction::ToggleReadStatus,
                     KeyCode::Enter => UiAction::OpenArticle,
                     _ => UiAction::None,
                 };
@@ -69,6 +95,12 @@ impl Widget for ControlsWidget {
             description!(" to navigate up/down, "),
             control!("h/l"),
             description!(" to switch between channels and articles, "),
+            control!("a"),
+            description!(" add a new RSS channel, "),
+            control!("r"),
+            description!(" remove an RSS channel, "),
+            control!("u"),
+            description!(" toggle read state of article, "),
             control!("q"),
             description!(" to exit"),
         ])

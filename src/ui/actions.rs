@@ -1,6 +1,10 @@
-use crate::{error::TrsError, persistence::RssChannelD};
+use crate::{
+    args,
+    error::TrsError,
+    persistence::{RssArticleD, RssChannelD},
+};
 
-use super::{AppState, FocussedPane, UiAction};
+use super::{AppState, FocussedPane, PopupUiAction, UiAction, UiCommandDispatchActions};
 
 pub fn handle_action(
     app_state: &mut AppState,
@@ -19,18 +23,97 @@ pub fn handle_action(
         UiAction::OpenArticle => {
             if let Some(channel_idx) = app_state.highlighted_channel {
                 if let Some(article_idx) = app_state.highlighted_article {
-                    if let Some(channel) = app_state.channels.get(channel_idx) {
-                        if let Some(article) = channel.articles.get(article_idx) {
-                            let open_res = open::that(&article.link);
-                            if let Err(e) = open_res {
-                                eprintln!("Failed to open article: {}", e);
-                            }
+                    if let Some(channel) = app_state.channels.get_mut(channel_idx) {
+                        if let Some(article) = channel.articles.get_mut(article_idx) {
+                            article.unread = false;
+                            app_state
+                                .dispatcher
+                                .send(UiCommandDispatchActions::MarkArticleRead(
+                                    args::MarkReadArgs {
+                                        id: article.id as u32,
+                                        unread: false,
+                                    },
+                                ))
+                                .unwrap();
+                            _ = open::that(&article.link);
                         }
                     }
                 }
             }
         }
+        UiAction::ShowAddChannelUi => {
+            app_state.show_add_channel_ui = true;
+        }
+        UiAction::RemoveChannel => {
+            let hi_channel = get_highlighted_channel(app_state);
+            let Some(channel) = hi_channel else {
+                return Ok(());
+            };
+
+            let remove_channel_args = args::RemoveChannelArgs {
+                id: channel.id as u32,
+            };
+
+            app_state
+                .dispatcher
+                .send(UiCommandDispatchActions::RemoveChannel(remove_channel_args))
+                .unwrap();
+        }
+        UiAction::ToggleReadStatus => {
+            let article = get_highlighted_article_mut(app_state);
+            let mut article_id = None;
+            let mut unread = None;
+            if let Some(article) = article {
+                article.unread = !article.unread;
+                article_id = Some(article.id);
+                unread = Some(article.unread);
+            }
+
+            if let Some(article_id) = article_id {
+                if let Some(unread) = unread {
+                    app_state
+                        .dispatcher
+                        .send(UiCommandDispatchActions::MarkArticleRead(
+                            args::MarkReadArgs {
+                                id: article_id as u32,
+                                unread,
+                            },
+                        ))
+                        .unwrap();
+                }
+            }
+        }
     };
+    Ok(())
+}
+
+pub fn handle_popup_action(
+    state: &mut AppState,
+    event: PopupUiAction,
+) -> std::result::Result<(), TrsError> {
+    match event {
+        PopupUiAction::None => {}
+        PopupUiAction::Submit => {
+            let add_channel_args = args::AddChannelArgs {
+                link: state.add_channel.clone(),
+            };
+            state
+                .dispatcher
+                .send(UiCommandDispatchActions::AddChannel(add_channel_args))
+                .unwrap();
+            state.show_add_channel_ui = false;
+        }
+        PopupUiAction::AddChar(c) => {
+            state.add_channel.push(c);
+        }
+        PopupUiAction::Backspace => {
+            state.add_channel.pop();
+        }
+        PopupUiAction::Close => {
+            state.show_add_channel_ui = false;
+        }
+    };
+
     Ok(())
 }
 
@@ -60,6 +143,18 @@ fn get_highlighted_channel<'a>(app_state: &'a AppState) -> Option<&'a RssChannel
         .and_then(|idx| app_state.channels.get(idx).or_else(|| None))
 }
 
+fn get_highlighted_channel_mut<'a>(app_state: &'a mut AppState) -> Option<&'a mut RssChannelD> {
+    app_state
+        .highlighted_channel
+        .and_then(|idx| app_state.channels.get_mut(idx).or_else(|| None))
+}
+
+fn get_highlighted_article_mut<'a>(app_state: &'a mut AppState) -> Option<&'a mut RssArticleD> {
+    let hi_article = app_state.highlighted_article?;
+    let channel = get_highlighted_channel_mut(app_state)?;
+    channel.articles.get_mut(hi_article)
+}
+
 fn focus_entry_up(app_state: &mut AppState) {
     match app_state.focussed {
         FocussedPane::Channels => decrement_highlighted_channel_idx(app_state),
@@ -77,12 +172,13 @@ fn focus_entry_down(app_state: &mut AppState) {
 }
 
 fn increment_highlighted_channel_idx(app_state: &mut AppState) -> Option<bool> {
-    let max_channel_idx = app_state.channels.len().saturating_sub(1);
-    if max_channel_idx == 0 {
+    let channels_len = app_state.channels.len();
+    if channels_len == 0 {
         app_state.highlighted_channel = None;
         return Some(false);
     }
 
+    let max_channel_idx = channels_len.saturating_sub(1);
     app_state.highlighted_channel = app_state
         .highlighted_channel
         .map(|idx| saturating_add(idx, 1, max_channel_idx))
