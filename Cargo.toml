@@ -12,3 +12,8 @@ reqwest = { version = "0.12.20", features = ["blocking"] }
 rusqlite = { version = "0.36.0", features = ["bundled", "time"] }
 time = { version = "0.3.41", features = ["parsing"] }
 xml-rs = "0.8.26"
+
+[profile.release]
+strip = true
+opt-level = "z"
+lto = true
