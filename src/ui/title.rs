@@ -9,7 +9,7 @@ pub struct TitleWidget;
 
 impl Widget for TitleWidget {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let title = "Terminal RSS Reader";
+        let title = "Terminal RSS Manager";
         let areas = Layout::default()
             .constraints(Constraint::from_ratios([(1, 3), (1, 3), (1, 3)]))
             .split(area)

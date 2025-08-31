@@ -60,13 +60,12 @@ pub fn handle_action(
                 .unwrap();
         }
         UiAction::ToggleReadStatus => {
-            let article = get_highlighted_article_mut(app_state);
+            let article = get_highlighted_article(app_state);
             let mut article_id = None;
             let mut unread = None;
             if let Some(article) = article {
-                article.unread = !article.unread;
+                unread = Some(!article.unread);
                 article_id = Some(article.id);
-                unread = Some(article.unread);
             }
 
             if let Some(article_id) = article_id {
@@ -143,16 +142,10 @@ fn get_highlighted_channel<'a>(app_state: &'a AppState) -> Option<&'a RssChannel
         .and_then(|idx| app_state.channels.get(idx).or_else(|| None))
 }
 
-fn get_highlighted_channel_mut<'a>(app_state: &'a mut AppState) -> Option<&'a mut RssChannelD> {
-    app_state
-        .highlighted_channel
-        .and_then(|idx| app_state.channels.get_mut(idx).or_else(|| None))
-}
-
-fn get_highlighted_article_mut<'a>(app_state: &'a mut AppState) -> Option<&'a mut RssArticleD> {
+fn get_highlighted_article<'a>(app_state: &'a AppState) -> Option<&'a RssArticleD> {
     let hi_article = app_state.highlighted_article?;
-    let channel = get_highlighted_channel_mut(app_state)?;
-    channel.articles.get_mut(hi_article)
+    let channel = get_highlighted_channel(app_state)?;
+    channel.articles.get(hi_article)
 }
 
 fn focus_entry_up(app_state: &mut AppState) {

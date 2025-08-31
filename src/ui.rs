@@ -9,7 +9,7 @@ pub mod title;
 use std::{
     io::Stdout,
     sync::mpsc::{channel, Receiver, Sender},
-    thread,
+    thread, time::Duration,
 };
 
 use crate::{
@@ -136,23 +136,54 @@ fn draw(app_state: &AppState, terminal: &mut Terminal<CrosstermBackend<Stdout>>)
     Ok(())
 }
 
+pub enum Event {
+    UserInput(crossterm::event::Event),
+    ReloadState,
+    Tick,
+}
+
 fn handle_events(state: &mut AppState, ctx: &TrsEnv) -> Result<()> {
-    let recv_action = state.receiver.try_recv();
+    let event = get_event(state)?;
+    match event {
+        Event::UserInput(event) => {
+            handle_user_input(state, event)?;
+        }
+        Event::ReloadState => {
+            let channels = commands::list_channels(&ctx, &ListChannelArgs { limit: None })?;
+            state.channels = channels;
+        }
+        Event::Tick => {}
+    };
 
-    if let Ok(_) = recv_action {
-        let channels = commands::list_channels(&ctx, &ListChannelArgs { limit: None })?;
-        state.channels = channels;
-    }
+    Ok(())
+}
 
-    let raw_event = event::read().map_err(|e| TrsError::TuiError(e))?;
+fn handle_user_input(state: &mut AppState, event: event::Event) -> Result<()> {
     if state.show_add_channel_ui {
-        let event = controls::parse_popup_ui_action(raw_event);
-        return actions::handle_popup_action(state, event);
+        let popup_ui_action = controls::parse_popup_ui_action(event);
+        actions::handle_popup_action(state, popup_ui_action)?;
+        return Ok(());
     }
 
-    let event = controls::parse_ui_action(raw_event);
-    state.last_action = Some(event.clone());
-    actions::handle_action(state, event)
+    let ui_action = controls::parse_ui_action(event);
+    state.last_action = Some(ui_action.clone());
+    actions::handle_action(state, ui_action)?;
+    return Ok(());
+}
+
+fn get_event(state: &mut AppState) -> Result<Event> {
+    let recv_action = state.receiver.try_recv();
+    if let Ok(_) = recv_action {
+        return Ok(Event::ReloadState);
+    }
+
+    let raw_event = event::poll(Duration::from_millis(250)).map_err(|e| TrsError::TuiError(e))?;
+    if raw_event == false {
+        return Ok(Event::Tick);
+    }
+
+    // It's guaranteed that an event is available now
+    Ok(Event::UserInput(event::read().unwrap()))
 }
 
 struct AppStateWidget<'a> {
