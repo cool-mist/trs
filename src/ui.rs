@@ -8,27 +8,28 @@ pub mod title;
 
 use std::{
     io::Stdout,
-    sync::mpsc::{channel, Receiver, Sender},
-    thread, time::Duration,
+    sync::mpsc::{channel, Sender},
+    time::Duration,
 };
 
 use crate::{
-    args::{self, ListChannelArgs, UiArgs},
-    commands::{self, TrsEnv},
+    args::{self, UiArgs},
     error::{Result, TrsError},
     persistence::RssChannelD,
 };
 use articles::ArticlesWidget;
 use channels::ChannelsWidget;
 use controls::ControlsWidget;
-use crossterm::event;
+use crossterm::event::{self, KeyEventKind};
 use debug::DebugWidget;
 use executor::UiCommandExecutor;
+use futures::{FutureExt, StreamExt};
 use ratatui::{
     prelude::*,
     widgets::{Block, Borders},
 };
 use title::TitleWidget;
+use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 pub struct AppState {
     exit: bool,
@@ -42,7 +43,7 @@ pub struct AppState {
     show_add_channel_ui: bool,
     add_channel: String,
     dispatcher: Sender<UiCommandDispatchActions>,
-    receiver: Receiver<u64>,
+    receiver: UnboundedReceiver<Event>,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -82,11 +83,13 @@ pub enum UiCommandDispatchActions {
     AddChannel(args::AddChannelArgs),
     RemoveChannel(args::RemoveChannelArgs),
     MarkArticleRead(args::MarkReadArgs),
+    ListChannels(args::ListChannelArgs),
 }
 
-pub fn ui(ctx: TrsEnv, args: &UiArgs) -> Result<()> {
-    let (tdispatch, rdispatch) = channel();
-    let (tupdate, rupdate) = channel();
+pub async fn ui(args: &UiArgs, db_name: &str) -> Result<()> {
+    let (app_dispatch, app_recv) = channel();
+    let (executor_dispatch, executor_recv) = tokio::sync::mpsc::unbounded_channel();
+    let event_recv = start_event_loop(executor_recv);
     let mut terminal = ratatui::init();
     let mut app_state = AppState {
         channels: Vec::new(),
@@ -99,31 +102,79 @@ pub fn ui(ctx: TrsEnv, args: &UiArgs) -> Result<()> {
         last_action: None,
         show_add_channel_ui: false,
         add_channel: String::new(),
-        dispatcher: tdispatch,
-        receiver: rupdate,
+        dispatcher: app_dispatch,
+        receiver: event_recv,
     };
 
-    let ctx_cloned = ctx.clone();
-    let executor = UiCommandExecutor::new(rdispatch, tupdate);
-    let executor_handle = thread::spawn(move || {
-        executor.run(ctx_cloned);
+    let db_name = db_name.to_string();
+    std::thread::spawn(move || {
+        let mut executor = UiCommandExecutor::new(app_recv, executor_dispatch);
+        executor.run(db_name);
     });
 
-    let channels = commands::list_channels(&ctx, &ListChannelArgs { limit: None })?;
-    app_state.channels = channels;
+    app_state
+        .dispatcher
+        .send(UiCommandDispatchActions::ListChannels(
+            args::ListChannelArgs { limit: None },
+        ))
+        .map_err(|e| TrsError::Error(format!("Unable to send initial app: {}", e)))?;
 
     loop {
         draw(&app_state, &mut terminal)?;
-        handle_events(&mut app_state, &ctx)?;
+        handle_events(&mut app_state).await?;
         if app_state.exit {
             break;
         }
     }
 
     drop(app_state);
-    executor_handle.join().unwrap();
     ratatui::restore();
     Ok(())
+}
+
+fn start_event_loop(
+    mut executor_recv: UnboundedReceiver<BackendEvent>,
+) -> UnboundedReceiver<Event> {
+    let (evt_dispatch, evt_recv) = tokio::sync::mpsc::unbounded_channel();
+    let _event_tx = evt_dispatch.clone();
+    let _task = tokio::spawn(async move {
+        let mut reader = crossterm::event::EventStream::new();
+        let mut tick_interval = tokio::time::interval(Duration::from_millis(250));
+        loop {
+            let tick_delay = tick_interval.tick();
+            let crossterm_event = reader.next().fuse();
+            tokio::select! {
+              user_input = crossterm_event => {
+                match user_input {
+                  Some(Ok(evt)) => {
+                    match evt {
+                      crossterm::event::Event::Key(key) => {
+                        if key.kind == KeyEventKind::Press {
+                          _event_tx.send(Event::UserInput(crossterm::event::Event::Key(key))).unwrap();
+                        }
+                      },
+                      _ => {}
+                    }
+                  },
+                  _ => {}
+                }
+              },
+              executor_event = executor_recv.recv() => {
+                  match executor_event {
+                    Some(backend_event) => {
+                      _event_tx.send(Event::BackendEvent(backend_event)).unwrap();
+                    },
+                    None => {}
+                  }
+              },
+              _ = tick_delay => {
+                  _event_tx.send(Event::Tick).unwrap();
+              },
+            }
+        }
+    });
+
+    evt_recv
 }
 
 fn draw(app_state: &AppState, terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> Result<()> {
@@ -138,20 +189,29 @@ fn draw(app_state: &AppState, terminal: &mut Terminal<CrosstermBackend<Stdout>>)
 
 pub enum Event {
     UserInput(crossterm::event::Event),
-    ReloadState,
+    BackendEvent(BackendEvent),
     Tick,
 }
 
-fn handle_events(state: &mut AppState, ctx: &TrsEnv) -> Result<()> {
-    let event = get_event(state)?;
+pub enum BackendEvent {
+    ReloadState(Vec<RssChannelD>),
+}
+
+async fn handle_events(state: &mut AppState) -> Result<()> {
+    let event = state.receiver.recv().await;
+    let Some(event) = event else {
+        return Ok(());
+    };
+
     match event {
         Event::UserInput(event) => {
             handle_user_input(state, event)?;
         }
-        Event::ReloadState => {
-            let channels = commands::list_channels(&ctx, &ListChannelArgs { limit: None })?;
-            state.channels = channels;
-        }
+        Event::BackendEvent(backend_event) => match backend_event {
+            BackendEvent::ReloadState(channels) => {
+                state.channels = channels;
+            }
+        },
         Event::Tick => {}
     };
 
@@ -169,21 +229,6 @@ fn handle_user_input(state: &mut AppState, event: event::Event) -> Result<()> {
     state.last_action = Some(ui_action.clone());
     actions::handle_action(state, ui_action)?;
     return Ok(());
-}
-
-fn get_event(state: &mut AppState) -> Result<Event> {
-    let recv_action = state.receiver.try_recv();
-    if let Ok(_) = recv_action {
-        return Ok(Event::ReloadState);
-    }
-
-    let raw_event = event::poll(Duration::from_millis(250)).map_err(|e| TrsError::TuiError(e))?;
-    if raw_event == false {
-        return Ok(Event::Tick);
-    }
-
-    // It's guaranteed that an event is available now
-    Ok(Event::UserInput(event::read().unwrap()))
 }
 
 struct AppStateWidget<'a> {

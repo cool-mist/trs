@@ -8,15 +8,18 @@ pub mod parser;
 pub mod persistence;
 pub mod ui;
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     let args = argh::from_env::<TrsArgs>();
-    let mut ctx = TrsEnv::new("test3")?;
+    let db_name = "test3";
     match args.sub_command {
         TrsSubCommand::AddChannel(args) => {
+            let mut ctx = TrsEnv::new(db_name)?;
             commands::add_channel(&mut ctx, &args)?;
             Ok(())
         }
         TrsSubCommand::ListChannels(args) => {
+            let mut ctx = TrsEnv::new(db_name)?;
             let channels = commands::list_channels(&mut ctx, &args)?;
             for channel in channels {
                 println!(
@@ -27,8 +30,12 @@ fn main() -> Result<()> {
 
             Ok(())
         }
-        TrsSubCommand::RemoveChannel(args) => commands::remove_channel(&mut ctx, &args),
+        TrsSubCommand::RemoveChannel(args) => {
+            let mut ctx = TrsEnv::new("test3")?;
+            commands::remove_channel(&mut ctx, &args)
+        }
         TrsSubCommand::GetArticles(args) => {
+            let mut ctx = TrsEnv::new(db_name)?;
             let channels = commands::get_articles_by_channel(&mut ctx, &args)?;
             for channel in channels {
                 println!(
@@ -49,7 +56,10 @@ fn main() -> Result<()> {
             }
             Ok(())
         }
-        TrsSubCommand::MarkRead(args) => commands::mark_read(&mut ctx, &args),
-        TrsSubCommand::Ui(args) => ui::ui(ctx, &args),
+        TrsSubCommand::MarkRead(args) => {
+            let mut ctx = TrsEnv::new("test3")?;
+            commands::mark_read(&mut ctx, &args)
+        }
+        TrsSubCommand::Ui(args) => ui::ui(&args, db_name).await,
     }
 }
