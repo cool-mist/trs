@@ -29,7 +29,7 @@ use ratatui::{
     widgets::{Block, Borders},
 };
 use title::TitleWidget;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::UnboundedReceiver;
 
 pub struct AppState {
     exit: bool,
