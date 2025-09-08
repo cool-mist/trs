@@ -82,6 +82,18 @@ pub fn handle_action(
                 }
             }
         }
+        UiAction::SyncChannel => {
+            let channel = get_highlighted_channel(app_state);
+            if let Some(channel) = channel {
+                let sync_channel_args = args::AddChannelArgs {
+                    link: channel.feed_link.clone(),
+                };
+                app_state
+                    .dispatcher
+                    .send(UiCommandDispatchActions::AddChannel(sync_channel_args))
+                    .unwrap();
+            }
+        }
     };
     Ok(())
 }

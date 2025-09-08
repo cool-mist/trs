@@ -1,9 +1,9 @@
 pub mod actions;
 pub mod articles;
+pub mod backend;
 pub mod channels;
 pub mod controls;
 pub mod debug;
-pub mod executor;
 pub mod title;
 
 use std::{
@@ -22,7 +22,6 @@ use channels::ChannelsWidget;
 use controls::ControlsWidget;
 use crossterm::event::{self, KeyEventKind};
 use debug::DebugWidget;
-use executor::UiCommandExecutor;
 use futures::{FutureExt, StreamExt};
 use ratatui::{
     prelude::*,
@@ -66,6 +65,7 @@ pub enum UiAction {
     ShowAddChannelUi,
     RemoveChannel,
     ToggleReadStatus,
+    SyncChannel,
     Exit,
 }
 
@@ -86,11 +86,24 @@ pub enum UiCommandDispatchActions {
     ListChannels(args::ListChannelArgs),
 }
 
+
+/// APP
+///  - Listen Event
+///  - Publish UiCommandDispatchActions
+///
+/// BACKEND
+///  - Listen UiCommandDispatchActions
+///  - Publish BackendEvent
+///
+/// EVENT LOOP
+///  - Listen BackendEvent
+///  - Listen crossterm::event::Event
+///  - Publish Event
 pub async fn ui(args: &UiArgs, db_name: &str) -> Result<()> {
-    let (app_dispatch, app_recv) = channel();
-    let (executor_dispatch, executor_recv) = tokio::sync::mpsc::unbounded_channel();
-    let event_recv = start_event_loop(executor_recv);
-    let mut terminal = ratatui::init();
+    let (ui_action_publisher, ui_action_receiver) = channel();
+    let (backend_event_publisher, backend_event_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let event_receiver = start_event_loop(backend_event_receiver);
+
     let mut app_state = AppState {
         channels: Vec::new(),
         exit: false,
@@ -102,15 +115,11 @@ pub async fn ui(args: &UiArgs, db_name: &str) -> Result<()> {
         last_action: None,
         show_add_channel_ui: false,
         add_channel: String::new(),
-        dispatcher: app_dispatch,
-        receiver: event_recv,
+        dispatcher: ui_action_publisher,
+        receiver: event_receiver,
     };
 
-    let db_name = db_name.to_string();
-    std::thread::spawn(move || {
-        let mut executor = UiCommandExecutor::new(app_recv, executor_dispatch);
-        executor.run(db_name);
-    });
+    start_backend(db_name, ui_action_receiver, backend_event_publisher);
 
     app_state
         .dispatcher
@@ -119,6 +128,7 @@ pub async fn ui(args: &UiArgs, db_name: &str) -> Result<()> {
         ))
         .map_err(|e| TrsError::Error(format!("Unable to send initial app: {}", e)))?;
 
+    let mut terminal = ratatui::init();
     loop {
         draw(&app_state, &mut terminal)?;
         handle_events(&mut app_state).await?;
@@ -130,6 +140,13 @@ pub async fn ui(args: &UiArgs, db_name: &str) -> Result<()> {
     drop(app_state);
     ratatui::restore();
     Ok(())
+}
+
+fn start_backend(db_name: &str, app_recv: std::sync::mpsc::Receiver<UiCommandDispatchActions>, executor_dispatch: tokio::sync::mpsc::UnboundedSender<BackendEvent>) {
+    let db_name = db_name.to_string();
+    std::thread::spawn(move || {
+        backend::start(db_name, app_recv, executor_dispatch);
+    });
 }
 
 fn start_event_loop(

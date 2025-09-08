@@ -12,6 +12,7 @@ const SCHEMA_CHANNELS: &'static str = "CREATE TABLE IF NOT EXISTS Channels ( \
     id INTEGER PRIMARY KEY, \
     name TEXT NOT NULL, \
     link TEXT NOT NULL UNIQUE, \
+    feed_link TEXT NOT NULL UNIQUE, \
     description TEXT, \
     last_update INTEGER\
 )";
@@ -28,14 +29,14 @@ const SCHEMA_ARTICLES: &'static str = "CREATE TABLE IF NOT EXISTS Articles ( \
     FOREIGN KEY(channel_id) REFERENCES Channels(id) ON DELETE CASCADE \
 )";
 
-const ADD_CHANNEL: &'static str = "INSERT INTO Channels (name, link, description, last_update) \
-          VALUES (?1, ?2, ?3, ?4)\
-          ON CONFLICT(link) DO UPDATE SET name=?1, description=?3, last_update=?4";
+const ADD_CHANNEL: &'static str = "INSERT INTO Channels (name, link, feed_link, description, last_update) \
+          VALUES (?1, ?2, ?3, ?4, ?5)\
+          ON CONFLICT(link) DO UPDATE SET name=?1, description=?4, last_update=?5";
 const REMOVE_CHANNEL: &'static str = "DELETE FROM Channels WHERE id = ?1";
 const LIST_CHANNELS: &'static str =
-    "SELECT id, name, link, description, last_update FROM Channels LIMIT ?1";
+    "SELECT id, name, link, feed_link, description, last_update FROM Channels order by last_update DESC LIMIT ?1";
 const GET_CHANNEL: &'static str =
-    "SELECT id, name, link, description, last_update FROM Channels WHERE link = ?1";
+    "SELECT id, name, link, feed_link, description, last_update FROM Channels WHERE link = ?1";
 
 const ADD_ARTICLE: &'static str =
     "INSERT INTO Articles (channel_id, title, description, link, pub_date, last_update, unread) \
@@ -49,7 +50,7 @@ const GET_ARTICLE: &'static str =
     "SELECT id, channel_id, title, description, link, pub_date, last_update, unread FROM Articles WHERE link = ?1";
 
 const LIST_ARTICLES: &'static str =
-    "SELECT id, channel_id, title, description, link, pub_date, last_update, unread FROM Articles";
+    "SELECT id, channel_id, title, description, link, pub_date, last_update, unread FROM Articles order by last_update DESC";
 
 const MARK_ARTICLE_READ: &'static str = "UPDATE Articles SET unread = FALSE WHERE id = ?1";
 
@@ -63,6 +64,7 @@ pub struct RssChannelD {
     pub id: i64,
     pub title: String,
     pub link: String,
+    pub feed_link: String,
     pub description: String,
     pub last_update: OffsetDateTime,
     pub articles: Vec<RssArticleD>,
@@ -126,13 +128,14 @@ impl Db {
         Ok(channel)
     }
 
-    pub fn add_channel(&self, channel: &RssChannel) -> Result<RssChannelD> {
+    pub fn add_channel(&self, feed_link: impl AsRef<str>, channel: &RssChannel) -> Result<RssChannelD> {
         self.connection
             .execute(
                 ADD_CHANNEL,
                 (
                     &channel.title,
                     &channel.link,
+                    feed_link.as_ref(),
                     &channel.description,
                     OffsetDateTime::now_utc().unix_timestamp(),
                 ),
@@ -256,7 +259,8 @@ impl Db {
             row.get(1)?,
             row.get(2)?,
             row.get(3)?,
-            Db::read_datetime(4, &row)?,
+            row.get(4)?,
+            Db::read_datetime(5, &row)?,
             Vec::new(),
         ))
     }
@@ -295,6 +299,7 @@ impl RssChannelD {
         id: i64,
         title: String,
         link: String,
+        feed_link: String,
         description: String,
         last_update: OffsetDateTime,
         articles: Vec<RssArticleD>,
@@ -303,6 +308,7 @@ impl RssChannelD {
             id,
             title,
             link,
+            feed_link,
             description,
             last_update,
             articles,

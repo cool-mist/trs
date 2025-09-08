@@ -50,7 +50,7 @@ pub fn add_channel(ctx: &TrsEnv, args: &AddChannelArgs) -> Result<RssChannelD, T
         .ignore_invalid_encoding_declarations(true)
         .create_reader(&bytes[..]);
     let channel = parser::parse_rss_channel(xml_source_stream)?;
-    ctx.db.add_channel(&channel)
+    ctx.db.add_channel(&args.link, &channel)
 }
 
 pub fn list_channels(ctx: &TrsEnv, args: &ListChannelArgs) -> Result<Vec<RssChannelD>, TrsError> {

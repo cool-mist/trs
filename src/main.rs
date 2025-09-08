@@ -11,7 +11,7 @@ pub mod ui;
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = argh::from_env::<TrsArgs>();
-    let db_name = "test3";
+    let db_name = "test4";
     match args.sub_command {
         TrsSubCommand::AddChannel(args) => {
             let mut ctx = TrsEnv::new(db_name)?;
