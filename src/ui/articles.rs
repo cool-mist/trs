@@ -3,7 +3,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph, Widget},
+    widgets::{Block, Paragraph, Widget},
 };
 
 use super::AppState;
@@ -26,10 +26,6 @@ impl<'a> Widget for ArticlesWidget<'a> {
         };
 
         let Some(channel) = selected_channel else {
-            let para = Paragraph::new("j/k to navigate channels, q to exit")
-                .block(Block::default().borders(Borders::NONE))
-                .alignment(Alignment::Center);
-            para.render(area, buf);
             return;
         };
 
@@ -42,7 +38,7 @@ impl<'a> Widget for ArticlesWidget<'a> {
         let total_articles = channel.articles.len().min(total_articles as usize);
         let article_rows = Layout::default()
             .direction(Direction::Vertical)
-            .margin(1)
+            .margin(2)
             .constraints(
                 (0..total_articles)
                     .map(|_| Constraint::Length(height_per_entry))
@@ -94,7 +90,7 @@ fn get_article_id_style(highlighted: bool) -> Style {
 fn get_channel_list_item_block_style(highlighted: bool) -> Style {
     if highlighted {
         Style::default()
-            .bg(Color::LightYellow)
+            .bg(Color::White)
             .add_modifier(Modifier::BOLD)
     } else {
         Style::default()

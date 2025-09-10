@@ -25,7 +25,7 @@ use debug::DebugWidget;
 use futures::{FutureExt, StreamExt};
 use ratatui::{
     prelude::*,
-    widgets::{Block, Borders},
+    widgets::{Block, Borders, Padding},
 };
 use title::TitleWidget;
 use tokio::sync::mpsc::UnboundedReceiver;
@@ -86,7 +86,6 @@ pub enum UiCommandDispatchActions {
     ListChannels(args::ListChannelArgs),
 }
 
-
 /// APP
 ///  - Listen Event
 ///  - Publish UiCommandDispatchActions
@@ -142,7 +141,11 @@ pub async fn ui(args: &UiArgs, db_name: &str) -> Result<()> {
     Ok(())
 }
 
-fn start_backend(db_name: &str, app_recv: std::sync::mpsc::Receiver<UiCommandDispatchActions>, executor_dispatch: tokio::sync::mpsc::UnboundedSender<BackendEvent>) {
+fn start_backend(
+    db_name: &str,
+    app_recv: std::sync::mpsc::Receiver<UiCommandDispatchActions>,
+    executor_dispatch: tokio::sync::mpsc::UnboundedSender<BackendEvent>,
+) {
     let db_name = db_name.to_string();
     std::thread::spawn(move || {
         backend::start(db_name, app_recv, executor_dispatch);
@@ -227,6 +230,9 @@ async fn handle_events(state: &mut AppState) -> Result<()> {
         Event::BackendEvent(backend_event) => match backend_event {
             BackendEvent::ReloadState(channels) => {
                 state.channels = channels;
+                if state.highlighted_channel.is_none() && !state.channels.is_empty() {
+                    state.highlighted_channel = Some(0);
+                }
             }
         },
         Event::Tick => {}
@@ -260,9 +266,9 @@ impl<'a> AppStateWidget<'a> {
 
 impl<'a> Widget for AppStateWidget<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let mut horizontal_constraints = vec![Constraint::Percentage(100)];
+        let mut horizontal_constraints = vec![Constraint::Fill(5)];
         if is_debug_mode(self.app_state) {
-            horizontal_constraints.push(Constraint::Percentage(20));
+            horizontal_constraints.push(Constraint::Fill(1));
         }
 
         // Split the area into 2 horizontal sections, one for the main app and
@@ -282,24 +288,20 @@ impl<'a> Widget for AppStateWidget<'a> {
         let main_area_splits = Layout::default()
             .direction(Direction::Vertical)
             .constraints(vec![
-                Constraint::Percentage(10), // Title
-                Constraint::Percentage(80), // Other app widgets
-                Constraint::Percentage(10), // Controls
+                Constraint::Percentage(100), // Channels + Articles
+                Constraint::Min(4),          // Controls + Title
             ])
             .split(main_area)
             .to_vec();
 
-        // TITLE
-        let title_area = main_area_splits[0];
-        draw_app_widget_styled(Block::default(), &title_area, buf, TitleWidget);
-
         // OTHER APP WIDGETS
         let child_widgets_areas = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints(Constraint::from_percentages(vec![30, 70]))
-            .split(main_area_splits[1])
+            .constraints(Constraint::from_fills([4, 6]))
+            .split(main_area_splits[0])
             .to_vec();
 
+        // CHANNELS
         let channels_area = child_widgets_areas[0];
         draw_app_widget_styled(
             get_child_widget_style(
@@ -311,6 +313,7 @@ impl<'a> Widget for AppStateWidget<'a> {
             ChannelsWidget::new(self.app_state),
         );
 
+        // ARTICLES
         let articles_area = child_widgets_areas[1];
         draw_app_widget_styled(
             get_child_widget_style(
@@ -322,8 +325,17 @@ impl<'a> Widget for AppStateWidget<'a> {
             ArticlesWidget::new(self.app_state),
         );
 
+        let controls_title = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints(Constraint::from_fills([1, 7]))
+            .split(main_area_splits[1]);
+
+        // TITLE
+        let title_area = controls_title[0];
+        draw_app_widget_styled(Block::default(), &title_area, buf, TitleWidget);
+
         // CONTROLS
-        let controls_area = main_area_splits[2];
+        let controls_area = controls_title[1];
         draw_app_widget_styled(Block::default(), &controls_area, buf, ControlsWidget);
     }
 }
@@ -361,18 +373,20 @@ where
 
 fn get_child_widget_style<'a>(arg: &'a str, focussed: bool) -> Block<'a> {
     let title = Line::from(arg)
-        .centered()
-        .style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD));
-
+        .style(
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
+        )
+        .centered();
     if focussed {
-        return Block::default()
-            .title_top(title)
-            .border_style(Style::default().fg(Color::Blue))
-            .borders(Borders::ALL);
+        return Block::default().title_top(title).bg(Color::DarkGray);
     }
 
     Block::default()
         .title_top(title)
+        .fg(Color::DarkGray)
+        .padding(Padding::uniform(10))
         .border_style(Style::default().fg(Color::DarkGray))
 }
 

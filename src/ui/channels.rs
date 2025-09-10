@@ -30,7 +30,7 @@ impl<'a> Widget for ChannelsWidget<'a> {
         let total_channels = self.state.channels.len().min(total_channels as usize);
         let channel_rows = Layout::default()
             .direction(Direction::Vertical)
-            .margin(1)
+            .margin(2)
             .constraints(
                 (0..total_channels)
                     .map(|_| Constraint::Length(height_per_entry))
@@ -109,7 +109,7 @@ fn get_channel_id_style(highlighted: bool) -> Style {
 fn get_channel_list_item_block_style(highlighted: bool) -> Style {
     if highlighted {
         Style::default()
-            .bg(Color::LightYellow)
+            .bg(Color::White)
             .add_modifier(Modifier::BOLD)
     } else {
         Style::default()
@@ -142,11 +142,11 @@ impl<'a> Widget for AddChannelWidget<'a> {
             .title_top(Line::from("Add Channel").centered())
             .title_style(
                 Style::default()
-                    .fg(Color::Blue)
-                    .add_modifier(Modifier::BOLD | Modifier::ITALIC | Modifier::UNDERLINED),
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
             )
             .borders(ratatui::widgets::Borders::ALL)
-            .border_style(Style::default().fg(Color::DarkGray));
+            .border_style(Style::default().fg(Color::White));
 
         let para = Paragraph::new(Line::from(self.state)).block(block);
 

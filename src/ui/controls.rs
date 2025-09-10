@@ -78,7 +78,9 @@ macro_rules! control {
     ($key:literal) => {
         Span::styled(
             $key,
-            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
         )
     };
 }
@@ -91,7 +93,7 @@ macro_rules! description {
 
 impl Widget for ControlsWidget {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let controls_text = Line::from(vec![
+        let controls_text_line_1 = Line::from(vec![
             control!("j/k"),
             description!(" to navigate up/down, "),
             control!("h/l"),
@@ -104,6 +106,14 @@ impl Widget for ControlsWidget {
             description!(" delete an RSS channel, "),
             control!("r"),
             description!(" toggle read state of article, "),
+        ])
+        .style(
+            Style::default()
+                .fg(Color::DarkGray)
+                .add_modifier(Modifier::BOLD),
+        );
+
+        let controls_text_line_2 = Line::from(vec![
             control!("q"),
             description!(" to exit"),
         ])
@@ -111,10 +121,11 @@ impl Widget for ControlsWidget {
             Style::default()
                 .fg(Color::DarkGray)
                 .add_modifier(Modifier::BOLD),
-        );
-        let para = Paragraph::new(controls_text)
+        )
+        .centered();
+        let para = Paragraph::new(vec![controls_text_line_1, controls_text_line_2])
             .block(Block::default().borders(Borders::NONE))
-            .alignment(Alignment::Center);
+            .alignment(Alignment::Left);
         para.render(area, buf);
     }
 }
